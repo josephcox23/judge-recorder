@@ -214,12 +214,15 @@ async function sendToServer(data, signal){
   fd.append("caption", data.caption);
   fd.append("band", data.band);
 
-  const res = await fetch("https://float-tartly-hula.ngrok-free.dev/upload?nocache=" + Date.now(), {
-  cache: "no-store", {
-    method: "POST",
-    body: fd,
-    signal
-  }});
+  const res = await fetch(
+    "https://float-tartly-hula.ngrok-free.dev/upload?nocache=" + Date.now(),
+    {
+      method: "POST",
+      body: fd,
+      signal,
+      cache: "no-store"
+    }
+  );
 
   const json = await res.json();
 
