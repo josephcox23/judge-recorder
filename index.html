@@ -221,9 +221,11 @@ async function submitRecording(){
     statusEl.textContent = "✅ Uploaded";
 
   } catch (err) {
-    console.log("Upload failed", err);
-    statusEl.textContent = "Upload failed ❌";
-  }
+  console.log("FULL ERROR:", err);
+  statusEl.textContent = "Upload failed ❌";
+
+  alert("Upload error: " + err.message);
+}
 
   submitBtn.disabled = false;
 }
