@@ -66,11 +66,27 @@ async def upload(file: UploadFile = File(...), judge: str = Form(...), caption: 
             }).execute()
             folder_id = folder["id"]
 
-        file_meta = {"name": file.filename, "parents":[folder_id]}
+        file_meta = {
+            "name": file.filename, 
+            "parents":[folder_id]
+        }
 
         media = MediaInMemoryUpload(contents, mimetype="audio/webm")
 
-        uploaded = drive.files().create(body=file_meta, media_body=media).execute()
+        uploaded = drive.files().create(
+            body=file_meta, 
+            media_body=media,
+            supportsAllDrives=True,
+            fields="id",
+        ).execute()
+        
+        drive.permissions().create(
+            fileId=uploaded["id"],   # ✅ FIXED HERE
+            body={
+                "type": "anyone",
+                "role": "reader"
+            }
+        ).execute()
 
         link = f"https://drive.google.com/file/d/{uploaded['id']}/view"
 
