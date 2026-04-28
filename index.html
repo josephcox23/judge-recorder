@@ -62,7 +62,9 @@ const player=document.getElementById('player');
 const submitBtn=document.getElementById('submitBtn');
 
 // LOAD DATA
-fetch("https://float-tartly-hula.ngrok-free.dev/config")
+fetch("https://float-tartly-hula.ngrok-free.dev/config?nocache=" + Date.now(), {
+  cache: "no-store"
+})
 .then(r=>r.json())
 .then(cfg=>{
   console.log("CONFIG DATA:", cfg);
@@ -212,11 +214,12 @@ async function sendToServer(data, signal){
   fd.append("caption", data.caption);
   fd.append("band", data.band);
 
-  const res = await fetch("https://float-tartly-hula.ngrok-free.dev/upload", {
+  const res = await fetch("https://float-tartly-hula.ngrok-free.dev/upload?nocache=" + Date.now(), {
+  cache: "no-store", {
     method: "POST",
     body: fd,
     signal
-  });
+  }});
 
   const json = await res.json();
 
