@@ -83,7 +83,6 @@ function render(cfg){
   jEl.innerHTML = "";
   bEl.innerHTML = "";
 
-  // ✅ FIXED LOOP
   cfg.judges.forEach(j => {
     const d = document.createElement('div');
     d.className = 'card';
@@ -98,7 +97,6 @@ function render(cfg){
     jEl.appendChild(d);
   });
 
-  // ✅ BANDS LOOP
   cfg.bands.forEach(b => {
     const d = document.createElement('div');
     d.className = 'card';
@@ -127,13 +125,9 @@ submitBtn.onclick=submitRecording;
 async function start(){
   stream=await navigator.mediaDevices.getUserMedia({audio:true});
 
-  let opt={};
-  if(MediaRecorder.isTypeSupported('audio/webm')) opt.mimeType='audio/webm';
-  else if(MediaRecorder.isTypeSupported('audio/mp4')) opt.mimeType='audio/mp4';
-
-  mediaRecorder=new MediaRecorder(stream,opt);
-
+  mediaRecorder=new MediaRecorder(stream);
   chunks=[];
+
   mediaRecorder.ondataavailable=e=>chunks.push(e.data);
 
   mediaRecorder.onstop=()=>{
@@ -171,41 +165,6 @@ function stop(){
   stopBtn.style.display='none';
 }
 
-// OFFLINE STORAGE (IndexedDB)
-const DB_NAME="judgeDB";
-const STORE="recordings";
-
-function openDB(){
-  return new Promise((res,rej)=>{
-    const req=indexedDB.open(DB_NAME,1);
-    req.onupgradeneeded=e=>e.target.result.createObjectStore(STORE,{autoIncrement:true});
-    req.onsuccess=()=>res(req.result);
-    req.onerror=()=>rej(req.error);
-  });
-}
-
-async function saveOffline(record){
-  const db=await openDB();
-  const tx=db.transaction(STORE,"readwrite");
-  tx.objectStore(STORE).add(record);
-}
-
-async function syncQueue(){
-  const db=await openDB();
-  const tx=db.transaction(STORE,"readwrite");
-  const store=tx.objectStore(STORE);
-  const all=store.getAll();
-
-  all.onsuccess=async ()=>{
-    for(const r of all.result){
-      try{ await sendToServer(r); }
-      catch(e){ return; }
-    }
-    store.clear();
-    statusEl.textContent="Synced offline recordings ✅";
-  };
-}
-
 // SEND TO SERVER
 async function sendToServer(data, signal){
   const fd = new FormData();
@@ -231,7 +190,7 @@ async function sendToServer(data, signal){
   }
 }
 
-// SUBMIT (MAIN LOGIC)
+// SUBMIT
 function safe(str){
   return str.toLowerCase().replace(/[^a-z0-9]/g,"_").replace(/_+/g,"_");
 }
@@ -251,7 +210,6 @@ async function submitRecording(){
   statusEl.textContent = "Uploading...";
 
   try {
-    // ⏱️ HARD TIMEOUT (5 seconds)
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
@@ -262,21 +220,12 @@ async function submitRecording(){
     statusEl.textContent = "✅ Uploaded";
 
   } catch (err) {
-    console.log("Upload failed → saving offline", err);
-
-    await saveOffline(record);
-
-    statusEl.textContent = "Saved offline 📶";
+    console.log("Upload failed", err);
+    statusEl.textContent = "Upload failed ❌";
   }
 
   submitBtn.disabled = false;
 }
-
-// AUTO SYNC
-window.addEventListener("online",()=>{
-  statusEl.textContent="Back online — syncing...";
-  syncQueue();
-});
 
 </script>
 </body>
