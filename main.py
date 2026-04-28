@@ -57,10 +57,38 @@ async def upload(
     try:
         contents = await file.read()
 
-        # 👇 Upload directly into YOUR folder (no folder creation logic)
+        # 👇 Find or create band folder
+        safe_band = band.replace("'", "\\'")
+        query = f"name='{safe_band}' and mimeType='application/vnd.google-apps.folder' and '{DRIVE_FOLDER_ID}' in parents and trashed=false"
+        
+        results = drive.files().list(
+            q=query,
+            spaces='drive',
+            fields='files(id, name)',
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True
+        ).execute()
+        
+        items = results.get("files", [])
+        
+        if items:
+            folder_id = items[0]["id"]
+        else:
+            folder = drive.files().create(
+                body={
+                    "name": band,
+                    "mimeType": "application/vnd.google-apps.folder",
+                    "parents": [DRIVE_FOLDER_ID]
+                },
+                fields="id",
+                supportsAllDrives=True
+            ).execute()
+            folder_id = folder["id"]
+        
+        # 👇 Upload INTO that folder
         file_metadata = {
             "name": file.filename,
-            "parents": [DRIVE_FOLDER_ID]
+            "parents": [folder_id]
         }
 
         media = MediaInMemoryUpload(contents, mimetype="audio/webm")
