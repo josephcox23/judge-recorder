@@ -2,7 +2,7 @@ print("RUNNING UPDATED VERSION")
 
 from fastapi import FastAPI, UploadFile, File, Form
 from googleapiclient.discovery import build
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 from googleapiclient.http import MediaInMemoryUpload
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,13 +21,8 @@ app.add_middleware(
 SPREADSHEET_ID = "1JZAGEGxh5Sfr5NBdOu5BAmMEE8A9aGmAbqv_QDG_I5Y"
 DRIVE_FOLDER_ID = "1jAOBOwOHtq04kJpKGIZr4QYid3hiS6Hp"
 
-# Load credentials from Render env variable
-creds = service_account.Credentials.from_service_account_info(
-    json.loads(os.environ["GOOGLE_CREDS"]),
-    scopes=[
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
+creds = Credentials.from_authorized_user_info(
+    json.loads(os.environ["GOOGLE_TOKEN"])
 )
 
 sheets = build("sheets", "v4", credentials=creds)
