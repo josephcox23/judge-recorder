@@ -185,6 +185,7 @@ async function sendToServer(data, signal){
   );
 
   const json = await res.json();
+  console.log("SERVER RESPONSE:", json);
 
   if(json.status !== "success"){
     throw new Error("Upload failed");
