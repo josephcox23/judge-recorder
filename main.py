@@ -5,6 +5,7 @@ from google.oauth2 import service_account
 from googleapiclient.http import MediaInMemoryUpload
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
+import os, json
 
 app = FastAPI()
 app.add_middleware(
@@ -18,8 +19,8 @@ app.add_middleware(
 SPREADSHEET_ID = "1JZAGEGxh5Sfr5NBdOu5BAmMEE8A9aGmAbqv_QDG_I5Y"
 DRIVE_FOLDER_ID = "1jAOBOwOHtq04kJpKGIZr4QYid3hiS6Hp"
 
-creds = service_account.Credentials.from_service_account_file(
-    "creds.json",
+creds = service_account.Credentials.from_service_account_info(
+    json.loads(os.environ["GOOGLE_CREDS"]),
     scopes=[
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
