@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Judge Recorder</title>
+
+<style>
+body{font-family:Arial;background:#f5f5f5;padding:14px;max-width:640px;margin:auto}
+.card{background:#fff;padding:16px;margin:8px 0;border-radius:12px;border:1px solid #ddd;text-align:center;cursor:pointer}
+.btn{width:100%;padding:16px;margin:10px 0;border-radius:10px;border:none;color:#fff;background:#1976d2;font-size:1.2rem}
+.btn.secondary{background:#555}.btn.danger{background:#d9534f}
+#recordingContainer.recording{border:2px solid red;padding:10px;border-radius:12px}
+#recordingIndicator{width:14px;height:14px;background:red;border-radius:50%;display:none;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:0}}
+audio{width:100%}
+</style>
+</head>
+
+<body>
+<h1>Judge Recorder</h1>
+
+<div id="step1">
+<h2>Select Judge</h2>
+<div id="judges"></div>
+</div>
+
+<div id="step2" style="display:none">
+<button class="btn secondary" onclick="showStep(1)">← Back</button>
+<h2>Select Band</h2>
+<div id="bands"></div>
+</div>
+
+<div id="step3" style="display:none">
+<button class="btn secondary" onclick="showStep(2)">← Back</button>
+<h2>Record</h2>
+
+<div id="recordingContainer">
+<span id="recordingIndicator"></span>
+<span id="timer">00:00</span>
+</div>
+
+<button class="btn" id="startBtn">Start</button>
+<button class="btn danger" id="stopBtn" style="display:none">Stop</button>
+
+<audio id="player" controls style="display:none"></audio>
+<button class="btn" id="submitBtn" style="display:none" style="background:#28a745">Submit</button>
+
+<div id="status"></div>
+</div>
+
+<script>
+
+let selectedJudge='',selectedCaption='',selectedBand='';
+let mediaRecorder,stream,chunks=[],audioBlob;
+let startTime=0,timerId;
+
+const statusEl=document.getElementById('status');
+const timerEl=document.getElementById('timer');
+const indicator=document.getElementById('recordingIndicator');
+const container=document.getElementById('recordingContainer');
+const player=document.getElementById('player');
+const submitBtn=document.getElementById('submitBtn');
+
+// LOAD DATA
+fetch("https://float-tartly-hula.ngrok-free.dev/config")
+.then(r=>r.json())
+.then(cfg=>{
+  console.log("CONFIG DATA:", cfg);
+  alert("Loaded " + cfg.judges.length + " judges");
+  render(cfg);
+})
+.catch(err=>{
+  console.error("FETCH ERROR:", err);
+  alert("Fetch failed");
+});
+
+function render(cfg){
+  const jEl = document.getElementById('judges');
+  const bEl = document.getElementById('bands');
+
+  jEl.innerHTML = "";
+  bEl.innerHTML = "";
+
+  // ✅ FIXED LOOP
+  cfg.judges.forEach(j => {
+    const d = document.createElement('div');
+    d.className = 'card';
+    d.textContent = j.name + " — " + j.caption;
+
+    d.onclick = () => {
+      selectedJudge = j.name;
+      selectedCaption = j.caption;
+      showStep(2);
+    };
+
+    jEl.appendChild(d);
+  });
+
+  // ✅ BANDS LOOP
+  cfg.bands.forEach(b => {
+    const d = document.createElement('div');
+    d.className = 'card';
+    d.textContent = b;
+
+    d.onclick = () => {
+      selectedBand = b;
+      showStep(3);
+    };
+
+    bEl.appendChild(d);
+  });
+}
+
+function showStep(n){
+  step1.style.display=n===1?'':'none';
+  step2.style.display=n===2?'':'none';
+  step3.style.display=n===3?'':'none';
+}
+
+// RECORDING
+document.getElementById('startBtn').onclick=start;
+document.getElementById('stopBtn').onclick=stop;
+submitBtn.onclick=submitRecording;
+
+async function start(){
+  stream=await navigator.mediaDevices.getUserMedia({audio:true});
+
+  let opt={};
+  if(MediaRecorder.isTypeSupported('audio/webm')) opt.mimeType='audio/webm';
+  else if(MediaRecorder.isTypeSupported('audio/mp4')) opt.mimeType='audio/mp4';
+
+  mediaRecorder=new MediaRecorder(stream,opt);
+
+  chunks=[];
+  mediaRecorder.ondataavailable=e=>chunks.push(e.data);
+
+  mediaRecorder.onstop=()=>{
+    audioBlob=new Blob(chunks,{type:'audio/webm'});
+    player.src=URL.createObjectURL(audioBlob);
+    player.style.display='';
+    submitBtn.style.display='';
+    statusEl.textContent="Ready to submit";
+  };
+
+  mediaRecorder.start();
+
+  indicator.style.display='inline-block';
+  container.classList.add('recording');
+
+  startTime=Date.now();
+  timerId=setInterval(()=>{
+    const s=Math.floor((Date.now()-startTime)/1000);
+    timerEl.textContent=`${String(s/60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+  },250);
+
+  startBtn.style.display='none';
+  stopBtn.style.display='';
+}
+
+function stop(){
+  mediaRecorder.stop();
+  stream.getTracks().forEach(t=>t.stop());
+
+  clearInterval(timerId);
+  indicator.style.display='none';
+  container.classList.remove('recording');
+
+  startBtn.style.display='';
+  stopBtn.style.display='none';
+}
+
+// OFFLINE STORAGE (IndexedDB)
+const DB_NAME="judgeDB";
+const STORE="recordings";
+
+function openDB(){
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(DB_NAME,1);
+    req.onupgradeneeded=e=>e.target.result.createObjectStore(STORE,{autoIncrement:true});
+    req.onsuccess=()=>res(req.result);
+    req.onerror=()=>rej(req.error);
+  });
+}
+
+async function saveOffline(record){
+  const db=await openDB();
+  const tx=db.transaction(STORE,"readwrite");
+  tx.objectStore(STORE).add(record);
+}
+
+async function syncQueue(){
+  const db=await openDB();
+  const tx=db.transaction(STORE,"readwrite");
+  const store=tx.objectStore(STORE);
+  const all=store.getAll();
+
+  all.onsuccess=async ()=>{
+    for(const r of all.result){
+      try{ await sendToServer(r); }
+      catch(e){ return; }
+    }
+    store.clear();
+    statusEl.textContent="Synced offline recordings ✅";
+  };
+}
+
+// SEND TO SERVER
+async function sendToServer(data, signal){
+  const fd = new FormData();
+  fd.append("file", data.file, data.filename);
+  fd.append("judge", data.judge);
+  fd.append("caption", data.caption);
+  fd.append("band", data.band);
+
+  const res = await fetch("https://float-tartly-hula.ngrok-free.dev/upload", {
+    method: "POST",
+    body: fd,
+    signal
+  });
+
+  const json = await res.json();
+
+  if(json.status !== "success"){
+    throw new Error("Upload failed");
+  }
+}
+
+// SUBMIT (MAIN LOGIC)
+function safe(str){
+  return str.toLowerCase().replace(/[^a-z0-9]/g,"_").replace(/_+/g,"_");
+}
+
+async function submitRecording(){
+  if(!audioBlob) return;
+
+  const record = {
+    file: audioBlob,
+    filename: `${safe(selectedJudge)}_${safe(selectedBand)}.webm`,
+    judge: selectedJudge,
+    caption: selectedCaption,
+    band: selectedBand
+  };
+
+  submitBtn.disabled = true;
+  statusEl.textContent = "Uploading...";
+
+  try {
+    // ⏱️ HARD TIMEOUT (5 seconds)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    await sendToServer(record, controller.signal);
+
+    clearTimeout(timeout);
+
+    statusEl.textContent = "✅ Uploaded";
+
+  } catch (err) {
+    console.log("Upload failed → saving offline", err);
+
+    await saveOffline(record);
+
+    statusEl.textContent = "Saved offline 📶";
+  }
+
+  submitBtn.disabled = false;
+}
+
+// AUTO SYNC
+window.addEventListener("online",()=>{
+  statusEl.textContent="Back online — syncing...";
+  syncQueue();
+});
+
+</script>
+</body>
+</html>
