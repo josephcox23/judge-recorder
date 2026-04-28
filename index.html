@@ -184,11 +184,20 @@ async function sendToServer(data, signal){
     }
   );
 
-  const json = await res.json();
-  console.log("SERVER RESPONSE:", json);
+  const text = await res.text();
+  console.log("RAW RESPONSE:", text);
+
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch (e) {
+    throw new Error("Invalid JSON response: " + text);
+  }
+
+  console.log("PARSED RESPONSE:", json);
 
   if(json.status !== "success"){
-    throw new Error("Upload failed");
+    throw new Error(json.error || "Unknown backend error");
   }
 }
 
@@ -222,9 +231,8 @@ async function submitRecording(){
     statusEl.textContent = "✅ Uploaded";
 
   } catch (err) {
-  console.log("FULL ERROR:", err);
+  console.error("UPLOAD ERROR:", err);
   statusEl.textContent = "Upload failed ❌";
-
   alert("Upload error: " + err.message);
 }
 
